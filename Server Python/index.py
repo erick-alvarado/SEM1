@@ -5,11 +5,16 @@ import requests
 import mysql.connector
 import tinys3
 import base64
+import pprint
+import boto3
+from botocore.exceptions import ClientError
+
+
 
 
 S3_ACCESS_KEY = 'AKIAXUSLBHHVKZ7OMR7L'
 S3_SECRET_KEY = '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'
-conn = tinys3.Connection(S3_ACCESS_KEY,S3_SECRET_KEY,endpoint='s3-us-east-1.amazonaws.com')
+conn = tinys3.Connection(S3_ACCESS_KEY,S3_SECRET_KEY,'semibck',endpoint='s3-us-east-1.amazonaws.com')
 
 
 app=Flask(__name__)
@@ -95,7 +100,10 @@ def obtener_perfil():
         }
         answer=executequery("SELECT url, MAX(idfoto) as idfoto FROM foto WHERE  idalbum=%(id_album)s GROUP BY url",album)
         for (url, idfoto)  in answer:
-                perfil['foto']=url#Obtener la foto de bucket s3
+                perfil['foto']=url
+        
+        
+                
 
         return jsonify(perfil)
 
@@ -122,19 +130,41 @@ def register():
                 'id_album':answer[0][0],
                 'foto':request.json['foto']
         }
-        # msg=""
-        # try:
-        #         msg = base64.b64decode(request.json['foto'])
-        # except:
-        #         msg=""
-        
+        msg=""
+        try:
+                msg= base64.b64decode(request.json['foto'])
+                answer=executequery("SELECT * FROM foto ",album)
+                FileName='photo'+str(album['id_album'])+str(len(answer))+'.png'
+                with open(FileName, 'wb') as file_to_save:
+                        file_to_save.write(msg)
+                        file_to_save.close()
+                f = open(FileName,'rb')
+
+                
+                #s3 = boto3.resource('s3')
+                #s3.Bucket('tarea2201603189').put_object(Key='fotica.png', Body=msg,ContentType='image/png',ACL='public-read')
+                s3 = boto3.client(
+                        's3',
+                        aws_access_key_id='AKIAXUSLBHHVKZ7OMR7L',
+                        aws_secret_access_key='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'
+                )
+                s3.upload_fileobj(
+                        f,
+                        "semibck",
+                        "Fotos_Perfil/"+FileName
+                )
+                print("Se cargo")
+
+        except ClientError as e:
+                print(e)
+                msg=""
+                print ('Error')
+        album['foto']="https://semibck.s3.us-east-1.amazonaws.com/Fotos_Perfil/"+FileName
         answer=executequery("INSERT INTO foto(idalbum,url) VALUES ( %(id_album)s,  %(foto)s ) ",album)
         
         
         return jsonify({'Message':'Usuario Creado Correctamente','Code':1})
         
-
-
 @app.route('/editar-perfil',methods=['PUT'])
 def editar_perfil():        
         userUpdate={
@@ -144,7 +174,58 @@ def editar_perfil():
                 'contrasenia':request.json['contrasenia'],
                 'foto':request.json['foto']
         }
-        return jsonify(userUpdate)
+        if "https://semibck.s3" in request.json['foto']: 
+                answer=executequery("SELECT * FROM usuario Where idusuario=%(id_user)s AND contrasena=%(contrasenia)s",userUpdate)
+                if len(answer)==1:
+                        answer=executequery("UPDATE usuario SET usuario=%(usuario)s, nombre=%(nombre_completo)s WHERE idusuario=%(id_user)s ",userUpdate)
+                        return jsonify({'Message':'Usuario editado','Code':1})
+        else:
+                answer=executequery("SELECT * FROM usuario Where idusuario=%(id_user)s AND contrasena=%(contrasenia)s",userUpdate)
+                if len(answer)==1:
+                        answer=executequery("UPDATE usuario SET usuario=%(usuario)s, nombre=%(nombre_completo)s WHERE idusuario=%(id_user)s ",userUpdate)
+                        #------------
+                        answer=executequery("SELECT * FROM album WHERE nombre='Foto_Perfil' AND idusuario=%(id_user)s",userUpdate)
+                        album={
+                                'id_album':answer[0][0],
+                                'foto':request.json['foto']
+                        }
+                        msg=""
+                        try:
+                                msg= base64.b64decode(request.json['foto'])
+                                answer=executequery("SELECT * FROM foto ",album)
+                                FileName='photo'+str(album['id_album'])+str(len(answer))+'.png'
+                                with open(FileName, 'wb') as file_to_save:
+                                        file_to_save.write(msg)
+                                        file_to_save.close()
+                                f = open(FileName,'rb')
+
+                                
+                                #s3 = boto3.resource('s3')
+                                #s3.Bucket('tarea2201603189').put_object(Key='fotica.png', Body=msg,ContentType='image/png',ACL='public-read')
+                                s3 = boto3.client(
+                                        's3',
+                                        aws_access_key_id='AKIAXUSLBHHVKZ7OMR7L',
+                                        aws_secret_access_key='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'
+                                )
+                                s3.upload_fileobj(
+                                        f,
+                                        "semibck",
+                                        "Fotos_Perfil/"+FileName
+                                )
+                                print("Se cargo")
+
+                        except ClientError as e:
+                                print(e)
+                                msg=""
+                                print ('Error')
+                        album['foto']="https://semibck.s3.us-east-1.amazonaws.com/Fotos_Perfil/"+FileName
+                        answer=executequery("INSERT INTO foto(idalbum,url) VALUES ( %(id_album)s,  %(foto)s ) ",album)
+                        
+                        #------------
+                        return jsonify({'Message':'Usuario editado','Code':1})
+        
+        return jsonify({'Message':'Contraseniaa incorrecta','Code':-1})
+                
         #'INSERT  Usuario SET '
 
 
@@ -155,31 +236,41 @@ def subir_foto():
                 'id_album':request.json['id_album'],
                 'foto':request.json['foto']
         }
+        msg=""
+        try:
+                msg= base64.b64decode(request.json['foto'])
+                answer=executequery("SELECT * FROM foto ",foto)
+                FileName='photo'+str(foto['id_album'])+str(len(answer))+'.png'
+                with open(FileName, 'wb') as file_to_save:
+                        file_to_save.write(msg)
+                        file_to_save.close()
+                f = open(FileName,'rb')
+
+                
+                #s3 = boto3.resource('s3')
+                #s3.Bucket('tarea2201603189').put_object(Key='fotica.png', Body=msg,ContentType='image/png',ACL='public-read')
+                s3 = boto3.client(
+                        's3',
+                        aws_access_key_id='AKIAXUSLBHHVKZ7OMR7L',
+                        aws_secret_access_key='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'
+                )
+                s3.upload_fileobj(
+                        f,
+                        "semibck",
+                        "Fotos_Publicadas/"+FileName
+                )
+                print("Se cargo")
+
+        except ClientError as e:
+                print(e)
+                msg=""
+                print ('Error')
+        foto['foto']="https://semibck.s3.us-east-1.amazonaws.com/Fotos_Publicadas/"+FileName
         answer=executequery("INSERT INTO foto(idalbum,url) VALUES ( %(id_album)s,  %(foto)s ) ",foto)
+        
         #cargar al bucket y devolver
         return jsonify(foto)
 
-
-@app.route('/add',methods=['POST'])
-def tod():
-        item_doc={
-                'autor':request.json['autor'],
-                'nota':request.json['nota']
-        }
-        urla='http://34.86.89.112:5000/add'
-        urlb='http://34.86.153.141:5000/add'
-        urlfinal=urla
-        datosa=requests.get('http://34.86.89.112:5000/ramcpu',headers=request.headers)
-        datosb=requests.get('http://34.86.153.141:5000/ramcpu',headers=request.headers)
-        
-        arr=json.loads(datosa.text)
-        arr2=json.loads(datosb.text)
-
-        num=getfinalurl(arr,arr2)
-        if num==1:
-            urlfinal=urlb
-        resp = requests.post(urlfinal, json=item_doc,headers=request.headers)
-        return  jsonify({"message":resp.text })
 
 def executequery(query,params):
     mydb = mysql.connector.connect(
@@ -200,24 +291,16 @@ def executequery(query,params):
     mydb.close()
     return all
 
-def getfinalurl(arr,arr2):
-    if arr['cantidad']>arr2['cantidad']:
-        return 1
-    elif arr['cantidad']<arr2['cantidad']:
-        return 0
-    if arr['ram']>arr2['ram']:
-        return 1
-    elif arr['ram']<arr2['ram']:
-        return 0
-    if arr['cpu']>arr2['cpu']:
-        return 1
-    elif arr['cpu']<arr2['cpu']:
-        return 0
-    return 0
+
 if __name__=="__main__":
+        
         app.run(host='0.0.0.0',debug=True,port=3000)
+# sudo apt update
+# sudo apt upgrade -Y
+# sud apt install python3-pip
 # pip install flask
 # pip install requests
 # pip install mysql-connector-python |pip install mysql-connector-python-rf
-#pip install tinys3
+#pip install boto3
+# pip install waitress
 
