@@ -1,5 +1,5 @@
 
-from flask import Flask, jsonify,redirect,url_for,request, render_template,Response
+from flask import Flask, jsonify,redirect,url_for,request, render_template,Response,make_response
 import json
 import requests
 import mysql.connector
@@ -8,6 +8,7 @@ import base64
 import pprint
 import boto3
 from botocore.exceptions import ClientError
+from flask_cors import CORS
 
 
 
@@ -18,17 +19,23 @@ conn = tinys3.Connection(S3_ACCESS_KEY,S3_SECRET_KEY,'semibck',endpoint='s3-us-e
 
 
 app=Flask(__name__)
-
+CORS(app)
 @app.route('/login',methods=['POST'])
 def login():        
         userToLog={
                 'usuario':request.json['usuario'],
                 'contrasenia':request.json['contrasenia']
         }
+        
         answer=executequery("SELECT * FROM usuario Where usuario=%(usuario)s AND contrasena=%(contrasenia)s",userToLog)
         if len(answer)==1:
-            return  jsonify({'id_user':answer[0][0]})
-        return jsonify({'id_user':-1})
+            resp=make_response(jsonify( {'id_user':-1}))
+            resp.headers['Access-Control-Allow-Origin'] = '*'
+            return  jsonify( {'id_user':answer[0][0]})
+        ##resp=make_response(jsonify( {'id_user':answer[0][0]}))
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return  jsonify( {'id_user':-1})
+        
 
 @app.route('/crear-album',methods=['POST'])
 def crear_album():        
