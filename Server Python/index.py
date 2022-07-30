@@ -13,6 +13,7 @@ from flask_cors import CORS
 
 
 
+
 S3_ACCESS_KEY = 'AKIAXUSLBHHVKZ7OMR7L'
 S3_SECRET_KEY = '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'
 conn = tinys3.Connection(S3_ACCESS_KEY,S3_SECRET_KEY,'semibck',endpoint='s3-us-east-1.amazonaws.com')
@@ -20,6 +21,70 @@ conn = tinys3.Connection(S3_ACCESS_KEY,S3_SECRET_KEY,'semibck',endpoint='s3-us-e
 
 app=Flask(__name__)
 CORS(app)
+
+
+@app.route('/tarea3-201603189',methods=['POST'])
+def subir_foto():        
+        foto={
+                'foto':request.json['foto']
+        }
+        msg=""
+        try:
+                msg= base64.b64decode(request.json['foto'])
+                
+                recog = boto3.client(
+                        'rekognition',
+                        region_name='us-east-1',
+                        aws_access_key_id='AKIAXUSLBHHVKZ7OMR7L',
+                        aws_secret_access_key='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'
+                )
+                response =recog.detect_labels(
+                Image={'Bytes': msg}, MaxLabels=50)
+                labels = [label for label in response['Labels']]
+                return jsonify(labels)
+                print("Se reconocio")
+
+        except ClientError as e:
+                print(e)
+                msg=""
+                print ('Error')
+        
+        
+        #cargar al bucket y devolver
+        return jsonify(foto)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @app.route('/login',methods=['POST'])
 def login():        
         userToLog={
@@ -235,48 +300,6 @@ def editar_perfil():
                 
         #'INSERT  Usuario SET '
 
-
-@app.route('/subir-foto',methods=['POST'])
-def subir_foto():        
-        foto={
-                'id_user':request.json['id_user'],
-                'id_album':request.json['id_album'],
-                'foto':request.json['foto']
-        }
-        msg=""
-        try:
-                msg= base64.b64decode(request.json['foto'])
-                answer=executequery("SELECT * FROM foto ",foto)
-                FileName='photo'+str(foto['id_album'])+str(len(answer))+'.png'
-                with open(FileName, 'wb') as file_to_save:
-                        file_to_save.write(msg)
-                        file_to_save.close()
-                f = open(FileName,'rb')
-
-                
-                #s3 = boto3.resource('s3')
-                #s3.Bucket('tarea2201603189').put_object(Key='fotica.png', Body=msg,ContentType='image/png',ACL='public-read')
-                s3 = boto3.client(
-                        's3',
-                        aws_access_key_id='AKIAXUSLBHHVKZ7OMR7L',
-                        aws_secret_access_key='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'
-                )
-                s3.upload_fileobj(
-                        f,
-                        "semibck",
-                        "Fotos_Publicadas/"+FileName
-                )
-                print("Se cargo")
-
-        except ClientError as e:
-                print(e)
-                msg=""
-                print ('Error')
-        foto['foto']="https://semibck.s3.us-east-1.amazonaws.com/Fotos_Publicadas/"+FileName
-        answer=executequery("INSERT INTO foto(idalbum,url) VALUES ( %(id_album)s,  %(foto)s ) ",foto)
-        
-        #cargar al bucket y devolver
-        return jsonify(foto)
 
 
 def executequery(query,params):
